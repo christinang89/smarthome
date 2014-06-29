@@ -1,8 +1,8 @@
-smartlights
+smarthome
 ===========
 
-API for controlling lights in the house
+API for controlling lights & lock in the house
 
-Only works for my house though lololol
+Only works for my house though.
 
-Thanks @bencxr -- I must disclaim that the bad style is my fault lolol
+Thanks @bencxr for the guidance -- I must disclaim that the bad style is my fault :/ lololol
