@@ -130,5 +130,19 @@ def putLock(id):
 	else:
 		return jsonify(result = "error", message = response.__dict__['_content'])	
 
+# gunicorn stuff here
+from werkzeug.contrib.fixers import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app)
+app.config.from_pyfile('config.py')
+
+import logging
+from logging.handlers import RotatingFileHandler
+file_handler = RotatingFileHandler('flask.log', maxBytes=1024 * 1024 * 100, backupCount=20)
+file_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+file_handler.setFormatter(formatter)
+app.logger.addHandler(file_handler)
+
 if __name__ == "__main__":
     app.run(debug = True, host='0.0.0.0')
+
