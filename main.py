@@ -32,7 +32,16 @@ def list():
 
 @app.route("/lights/<int:id>", methods=['GET'])
 def get(id):
-	list()
+	if lights == {}:
+		list()
+	
+	p = {'DeviceNum': id, 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+	states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+	for state in states:
+		if state["variable"] == "Status":
+			lights[str(id)]['status'] = state["value"]
+
 	return jsonify(**lights[str(id)])
 
 @app.route("/lights/<int:id>", methods=['PUT'])
