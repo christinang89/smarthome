@@ -14,16 +14,14 @@ lights = {}
 global locks
 locks = {}
 
-
 @app.route("/")
 def hello():
-    return "Hello aWorld!"
+    return "Hello World!"
 
-@app.route("/lights", methods=['GET'])
+@app.route("/lights", methods = ['GET'])
 def listLights():
-	p = {'rand': random.random()}
+	p = { 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
-	lst = []
 	devices = json.loads(response.__dict__['_content'])['devices']
 
 	for device in devices:
@@ -35,21 +33,22 @@ def listLights():
 
 	return jsonify(**lights)
 
-@app.route("/lights/<int:id>", methods=['GET'])
+@app.route("/lights/<int:id>", methods = ['GET'])
 def getLight(id):
 	if lights == {}:
 		listLights()
 	
-	p = {'DeviceNum': id, 'rand': random.random() }
+	p = { 'DeviceNum': id, 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
 	states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+	
 	for state in states:
 		if state["variable"] == "Status":
 			lights[str(id)]['status'] = state["value"]
 
 	return jsonify(**lights[str(id)])
 
-@app.route("/lights/<int:id>", methods=['PUT'])
+@app.route("/lights/<int:id>", methods = ['PUT'])
 def putLight(id):
 	if lights == {}:
 		listLights()
@@ -62,7 +61,7 @@ def putLight(id):
 		return jsonify(result = "error", message = "state not specified")
 
 	# do the real shizz
-	p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
+	p = { 'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
 	
 	# return response
@@ -72,9 +71,9 @@ def putLight(id):
 		return jsonify(result = "error", message = response.__dict__['_content'])
 		
 
-@app.route("/locks", methods=['GET'])
+@app.route("/locks", methods = ['GET'])
 def listLocks():
-	p = {'rand': random.random()}
+	p = { 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
 	lst = []
 	devices = json.loads(response.__dict__['_content'])['devices']
@@ -88,22 +87,22 @@ def listLocks():
 
 	return jsonify(**locks)
 
-@app.route("/locks/<int:id>", methods=['GET'])
+@app.route("/locks/<int:id>", methods = ['GET'])
 def getLock(id):
 	if locks == {}:
 		listLocks()
 	
-	p = {'DeviceNum': id, 'rand': random.random() }
-
+	p = { 'DeviceNum': id, 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
 	states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+	
 	for state in states:
 		if state["variable"] == "Status" and "DoorLock" in state["service"]:
 			locks[str(id)]['status'] = state["value"]
 
 	return jsonify(**locks[str(id)])
 
-@app.route("/locks/<int:id>", methods=['PUT'])
+@app.route("/locks/<int:id>", methods = ['PUT'])
 def putLock(id):
 	if locks == {}:
 		listLocks()
