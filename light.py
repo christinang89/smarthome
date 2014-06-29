@@ -1,9 +1,10 @@
 import flask
 
+# modal class for light 
 class Light():
 	id = 0
 	name = ""
-	room = ""
+	room = "" 
 	status = 0
 
 	def __init__(self, id, name, room, status):
