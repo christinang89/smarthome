@@ -4,6 +4,7 @@ from lock import *
 import requests
 import random
 import simplejson as json
+import os
 
 app = Flask(__name__)
 
@@ -53,19 +54,26 @@ def putLight(id):
 	if lights == {}:
 		listLights()
 
-	if str(id) in lights:
-		if "state" in request.get_json():
-			p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
-			
-			if "ERROR" not in response.__dict__['_content']:
-				return jsonify(result = "ok", state = request.get_json()['state'])	
-			else:
-				return jsonify(result = "error", message = response.__dict__['_content'])
-		else:
-			return jsonify(result = "error", message = "state not specified")
-	else:
+	# check inputs
+
+	if str(id) not in lights:
 		return jsonify(result = "error", message = "not a light")
+
+	if "state" not in request.get_json():
+		return jsonify(result = "error", message = "state not specified")
+
+	# do the real shizz
+
+	p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
+	
+	# return response
+
+	if "ERROR" not in response.__dict__['_content']:
+		return jsonify(result = "ok", state = request.get_json()['state'])	
+	else:
+		return jsonify(result = "error", message = response.__dict__['_content'])
+		
 
 @app.route("/locks", methods=['GET'])
 def listLocks():
@@ -102,20 +110,31 @@ def getLock(id):
 def putLock(id):
 	if locks == {}:
 		listLocks()
+	
+	# check inputs
 
-	if str(id) in locks:
-		if "state" in request.get_json():
-			p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
-			
-			if "ERROR" not in response.__dict__['_content']:
-				return jsonify(result = "ok", state = request.get_json()['state'])	
-			else:
-				return jsonify(result = "error", message = response.__dict__['_content'])
-		else:
-			return jsonify(result = "error", message = "state not specified")
-	else:
+	if str(id) not in locks:
 		return jsonify(result = "error", message = "not a lock")
+
+	if "state" not in request.get_json():
+		return jsonify(result = "error", message = "state not specified")
+
+	if "password" not in request.get_json():
+		return jsonify(result = "error", message = "password not specified")
+
+	if request.get_json()['password'] != os.environ['LOCKSECRET']:
+		return jsonify(result = "error", message = "wrong password")
+	
+	# do real stuff
+	p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
+	
+	# return the response
+
+	if "ERROR" not in response.__dict__['_content']:
+		return jsonify(result = "ok", state = request.get_json()['state'])	
+	else:
+		return jsonify(result = "error", message = response.__dict__['_content'])	
 
 if __name__ == "__main__":
     app.run(debug = True)
