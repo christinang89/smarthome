@@ -131,4 +131,4 @@ def putLock(id):
 		return jsonify(result = "error", message = response.__dict__['_content'])	
 
 if __name__ == "__main__":
-    app.run(debug = True)
+    app.run(debug = True, host='0.0.0.0')
