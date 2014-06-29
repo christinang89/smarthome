@@ -5,10 +5,11 @@ class Light():
 	name = ""
 	room = ""
 
-	def __init__(self, id, name, room):
+	def __init__(self, id, name, room, status):
 		self.id = id
 		self.name = name
 		self.room = room
+		self.status = status
 		
 	def __repr__(self):
-		return jsonify({"id": self.id, "name": self.name, "room": self.room})
+		return jsonify({"id": self.id, "name": self.name, "room": self.room, "status": self.status})
