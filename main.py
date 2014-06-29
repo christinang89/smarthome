@@ -26,12 +26,12 @@ def listLights():
 	lst = []
 	devices = json.loads(response.__dict__['_content'])['devices']
 
-	for i in devices:
-		if "device_type" in i:
-			if "Light" in i["device_type"] and "Sensor" not in i["device_type"]:
-				for n in i["states"]:
-					if n["variable"] == "Status":
-						lights[i["id"]] = Light(i["id"],i["name"],i["room"],n["value"]).__dict__
+	for device in devices:
+		if "device_type" in device:
+			if "Light" in device["device_type"] and "Sensor" not in device["device_type"]:
+				for state in device["states"]:
+					if state["variable"] == "Status":
+						lights[device["id"]] = Light(device["id"],device["name"],device["room"],state["value"]).__dict__
 
 	return jsonify(**lights)
 
@@ -55,7 +55,6 @@ def putLight(id):
 		listLights()
 
 	# check inputs
-
 	if str(id) not in lights:
 		return jsonify(result = "error", message = "not a light")
 
@@ -63,12 +62,10 @@ def putLight(id):
 		return jsonify(result = "error", message = "state not specified")
 
 	# do the real shizz
-
 	p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
 	
 	# return response
-
 	if "ERROR" not in response.__dict__['_content']:
 		return jsonify(result = "ok", state = request.get_json()['state'])	
 	else:
@@ -82,12 +79,12 @@ def listLocks():
 	lst = []
 	devices = json.loads(response.__dict__['_content'])['devices']
 
-	for i in devices:
-		if "device_type" in i:
-			if "DoorLock" in i["device_type"]:
-				for n in i["states"]:
-					if n["variable"] == "Status" and "DoorLock" in n["service"]:
-						locks[i["id"]] = Lock(i["id"],i["name"],i["room"],n["value"]).__dict__
+	for device in devices:
+		if "device_type" in device:
+			if "DoorLock" in device["device_type"]:
+				for state in device["states"]:
+					if state["variable"] == "Status" and "DoorLock" in state["service"]:
+						locks[device["id"]] = Lock(device["id"],device["name"],device["room"],state["value"]).__dict__
 
 	return jsonify(**locks)
 
@@ -112,7 +109,6 @@ def putLock(id):
 		listLocks()
 	
 	# check inputs
-
 	if str(id) not in locks:
 		return jsonify(result = "error", message = "not a lock")
 
@@ -126,11 +122,10 @@ def putLock(id):
 		return jsonify(result = "error", message = "wrong password")
 	
 	# do real stuff
-	p = {'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
+	p = { 'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
 	
 	# return the response
-
 	if "ERROR" not in response.__dict__['_content']:
 		return jsonify(result = "ok", state = request.get_json()['state'])	
 	else:
