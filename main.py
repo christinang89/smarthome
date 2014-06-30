@@ -14,6 +14,21 @@ lights = {}
 global locks
 locks = {}
 
+def listRoomNames():
+	roomNames = {}
+	p = { 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
+	rooms = json.loads(response.__dict__['_content'])['rooms']
+
+	for room in rooms:
+		if room["id"] not in roomNames:
+			roomNames[room["id"]] = room["name"]
+
+	return roomNames
+
+global roomNames
+roomNames = listRoomNames()
+
 @app.route("/")
 def hello():
     return "Hello World!"
@@ -27,9 +42,19 @@ def listLights():
 	for device in devices:
 		if "device_type" in device:
 			if "Light" in device["device_type"] and "Sensor" not in device["device_type"]:
+				# get room name
+				if int(device["room"]) not in roomNames:
+					roomName = "Room not found"
+				else:
+					roomName = roomNames[int(device["room"])]
+
+				# get device state
 				for state in device["states"]:
 					if state["variable"] == "Status":
-						lights[device["id"]] = Light(device["id"],device["name"],device["room"],state["value"]).__dict__
+						deviceStatus = state["value"]
+
+				# add light to dictionary
+				lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceStatus).__dict__
 
 	return jsonify(**lights)
 
@@ -75,15 +100,24 @@ def putLight(id):
 def listLocks():
 	p = { 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
-	lst = []
 	devices = json.loads(response.__dict__['_content'])['devices']
 
 	for device in devices:
 		if "device_type" in device:
 			if "DoorLock" in device["device_type"]:
+				# get room name
+				if int(device["room"]) not in roomNames:
+					roomName = "Room not found"
+				else:
+					roomName = roomNames[int(device["room"])]
+
+				# get device state
 				for state in device["states"]:
 					if state["variable"] == "Status" and "DoorLock" in state["service"]:
-						locks[device["id"]] = Lock(device["id"],device["name"],device["room"],state["value"]).__dict__
+						deviceStatus = state["value"]
+
+				# add lock to dictionary
+				locks[device["id"]] = Lock(device["id"],device["name"],roomName,deviceStatus).__dict__
 
 	return jsonify(**locks)
 
