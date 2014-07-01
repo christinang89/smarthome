@@ -14,21 +14,6 @@ lights = {}
 global locks
 locks = {}
 
-def listRoomNames():
-	roomNames = {}
-	p = { 'rand': random.random() }
-	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
-	rooms = json.loads(response.__dict__['_content'])['rooms']
-
-	for room in rooms:
-		if room["id"] not in roomNames:
-			roomNames[room["id"]] = room["name"]
-
-	return roomNames
-
-global roomNames
-roomNames = listRoomNames()
-
 @app.route("/")
 def hello():
     return "Hello World!"
@@ -37,7 +22,16 @@ def hello():
 def listLights():
 	p = { 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
-	devices = json.loads(response.__dict__['_content'])['devices']
+	responseContent = json.loads(response.__dict__['_content'])
+	devices = responseContent['devices']
+	rooms = responseContent['rooms']
+	roomNames = {}
+
+	for room in rooms:
+		if room["id"] not in roomNames:
+			roomNames[room["id"]] = room["name"]
+
+	# devices = json.loads(response.__dict__['_content'])['devices']
 
 	for device in devices:
 		if "device_type" in device:
@@ -100,7 +94,15 @@ def putLight(id):
 def listLocks():
 	p = { 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
-	devices = json.loads(response.__dict__['_content'])['devices']
+	responseContent = json.loads(response.__dict__['_content'])
+	devices = responseContent['devices']
+	rooms = responseContent['rooms']
+	roomNames = {}
+	#devices = json.loads(response.__dict__['_content'])['devices']
+
+	for room in rooms:
+		if room["id"] not in roomNames:
+			roomNames[room["id"]] = room["name"]
 
 	for device in devices:
 		if "device_type" in device:
