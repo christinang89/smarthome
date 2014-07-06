@@ -35,7 +35,7 @@ def listLights():
 
 	for device in devices:
 		if "device_type" in device:
-			if "Light" in device["device_type"] and "Sensor" not in device["device_type"]:
+			if ("Light" in device["device_type"] or "WeMoControllee" in device["device_type"]) and "Sensor" not in device["device_type"]:
 				# get room name
 				if int(device["room"]) not in roomNames:
 					roomName = "Room not found"
@@ -45,10 +45,10 @@ def listLights():
 				# get device state
 				for state in device["states"]:
 					if state["variable"] == "Status":
-						deviceStatus = state["value"]
+						deviceState = state["value"]
 
 				# add light to dictionary
-				lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceStatus).__dict__
+				lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceState).__dict__
 
 	return jsonify(**lights)
 
@@ -63,7 +63,7 @@ def getLight(id):
 	
 	for state in states:
 		if state["variable"] == "Status":
-			lights[str(id)]['status'] = state["value"]
+			lights[str(id)]['state'] = state["value"]
 
 	return jsonify(**lights[str(id)])
 
@@ -116,10 +116,10 @@ def listLocks():
 				# get device state
 				for state in device["states"]:
 					if state["variable"] == "Status" and "DoorLock" in state["service"]:
-						deviceStatus = state["value"]
+						deviceState = state["value"]
 
 				# add lock to dictionary
-				locks[device["id"]] = Lock(device["id"],device["name"],roomName,deviceStatus).__dict__
+				locks[device["id"]] = Lock(device["id"],device["name"],roomName,deviceState).__dict__
 
 	return jsonify(**locks)
 
@@ -134,7 +134,7 @@ def getLock(id):
 	
 	for state in states:
 		if state["variable"] == "Status" and "DoorLock" in state["service"]:
-			locks[str(id)]['status'] = state["value"]
+			locks[str(id)]['state'] = state["value"]
 
 	return jsonify(**locks[str(id)])
 
