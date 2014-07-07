@@ -5,6 +5,7 @@ import requests
 import random
 import simplejson as json
 import os
+import time
 
 app = Flask(__name__)
 
@@ -13,6 +14,80 @@ lights = {}
 
 global locks
 locks = {}
+
+def verifyLightState(id, targetState):
+	for i in range(50):
+		p = { 'DeviceNum': int(id), 'rand': random.random() }
+		response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+		states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+		
+		for state in states:
+			if state["variable"] == "Status":
+				lights[str(id)]['state'] = state["value"]
+		if lights[str(id)]['state'] == str(targetState):
+			return True
+		else:
+			time.sleep(0.1)
+	return False
+
+def verifyLockState(id, targetState):
+	for i in range(50):
+		p = { 'DeviceNum': int(id), 'rand': random.random() }
+		response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+		states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+		
+		for state in states:
+			if state["variable"] == "Status":
+				locks[str(id)]['state'] = state["value"]
+		if locks[str(id)]['state'] == str(targetState):
+			return True
+		else:
+			time.sleep(0.5)
+	return False
+
+def changeAllState(targetLightState, targetLockState):
+	if lights == {}:
+		listLights()
+	if locks == {}:
+		listLocks()
+
+	# check inputs
+	if "password" not in request.get_json():
+		return jsonify(result = "error", message = "password not specified")
+
+	if request.get_json()['password'] != os.environ['LOCKSECRET']:
+		return jsonify(result = "error", message = "wrong password")
+	
+	for light in lights:
+		if lights[light]["state"] == str((targetLightState+1)%2):
+			p = { 'DeviceNum': int(light), 'newTargetValue': targetLightState, 'rand': random.random() }
+			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
+			if "ERROR" in response.__dict__['_content']:
+				return jsonify(result = "error", message = response.__dict__['_content'])
+			if not verifyLightState(light, targetLightState):
+				return jsonify(result = "error", message = "changing state of " + str(light) + " has timed out")
+
+	for lock in locks:
+		if locks[lock]["state"] == str((targetLockState+1)%2):
+			p = { 'DeviceNum': int(lock), 'newTargetValue': targetLockState, 'rand': random.random() }
+			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
+			if "ERROR" in response.__dict__['_content']:
+				return jsonify(result = "error", message = response.__dict__['_content'])
+			if not verifyLockState(lock, targetLockState):
+				return jsonify(result = "error", message = "changing state of " + str(lock) + " has timed out")
+
+	if targetLightState == 1:
+		message = "Lights switched on"
+	else:
+		message = "Lights switched off"
+
+	if targetLockState == 0:
+		message += " and doors unlocked"
+	else:
+		message += " and doors locked"
+
+	return jsonify(result = "ok", message = message)
+	
 
 @app.route("/")
 def hello():
@@ -56,7 +131,6 @@ def listLights():
 def getLight(id):
 	if lights == {}:
 		listLights()
-	
 	p = { 'DeviceNum': id, 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
 	states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
@@ -85,7 +159,10 @@ def putLight(id):
 	
 	# return response
 	if "ERROR" not in response.__dict__['_content']:
-		return jsonify(result = "ok", state = request.get_json()['state'])	
+		if verifyLightState(id, request.get_json()['state']):
+			return jsonify(result = "ok", state = request.get_json()['state'])	
+		else:
+			return jsonify(result = "error", message = "switching state of " + str(id) + " has timed out")
 	else:
 		return jsonify(result = "error", message = response.__dict__['_content'])
 		
@@ -160,11 +237,23 @@ def putLock(id):
 	p = { 'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
 	
-	# return the response
+	# return response
 	if "ERROR" not in response.__dict__['_content']:
-		return jsonify(result = "ok", state = request.get_json()['state'])	
+		if verifyLockState(id, request.get_json()['state']):
+			return jsonify(result = "ok", state = request.get_json()['state'])	
+		else:
+			return jsonify(result = "error", message = "switching state of " + str(id) + " has timed out")
 	else:
-		return jsonify(result = "error", message = response.__dict__['_content'])	
+		return jsonify(result = "error", message = response.__dict__['_content'])
+
+@app.route("/away", methods = ['PUT'])
+def switchAway():
+	return changeAllState(0,1)
+
+@app.route("/home", methods = ['PUT'])
+def switchHome():
+	return changeAllState(1,0)
+
 
 # gunicorn stuff here
 from werkzeug.contrib.fixers import ProxyFix
