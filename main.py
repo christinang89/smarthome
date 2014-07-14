@@ -1,7 +1,5 @@
 from flask import *
-from light import *
-from lock import *
-from nest import *
+from device import *
 import requests
 import random
 import simplejson as json
