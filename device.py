@@ -1,7 +1,6 @@
 import flask
 
 # super class modal for devices
-
 class Device():
     id = 0
     name = ""
@@ -17,12 +16,15 @@ class Device():
     def __repr__(self):
         return jsonify({"id": self.id, "name": self.name, "room": self.room, "state": self.state})
 
+# class light inherits from device
 class Light(Device):
     pass
 
+# class lock inherits from device
 class Lock(Device):
     pass
 
+# class nest inherits from device and contains additional variables
 class Nest(Device):
     currentTemperature = 0
     maxTemp = 78
