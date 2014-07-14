@@ -1,6 +1,7 @@
 from flask import *
 from light import *
 from lock import *
+from nest import *
 import requests
 import random
 import simplejson as json
@@ -14,6 +15,9 @@ lights = {}
 
 global locks
 locks = {}
+
+global nests
+nests = {}
 
 def verifyLightState(id, targetState):
 	for i in range(50):
@@ -245,6 +249,97 @@ def putLock(id):
 			return jsonify(result = "error", message = "switching state of " + str(id) + " has timed out")
 	else:
 		return jsonify(result = "error", message = response.__dict__['_content'])
+
+
+@app.route("/nests", methods = ['GET'])
+def listNests():
+	p = { 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=user_data", params = p)
+	responseContent = json.loads(response.__dict__['_content'])
+	devices = responseContent['devices']
+	rooms = responseContent['rooms']
+	roomNames = {}
+
+	for room in rooms:
+		if room["id"] not in roomNames:
+			roomNames[room["id"]] = room["name"]
+
+	# devices = json.loads(response.__dict__['_content'])['devices']
+
+	for device in devices:
+
+		if "device_type" in device:
+			if "HVAC" in device["device_type"] or "NestStructure" in device["device_type"]:
+				if "HVAC" in device["device_type"]:
+					deviceId = device["id"]
+					deviceName = device["name"]
+					# get room name
+					if int(device["room"]) not in roomNames:
+						roomName = "Room not found"
+					else:
+						roomName = roomNames[int(device["room"])]
+
+					# get device state
+					for state in device["states"]:
+						if state["variable"] == "CurrentTemperature":
+							currentTemperature = state["value"]
+						if "TemperatureSetpoint1_Cool" in state["service"] and state["variable"] == "CurrentSetpoint":
+							targetTemperatureCool = state["value"]
+						if "TemperatureSetpoint1_Heat" in state["service"] and state["variable"] == "CurrentSetpoint":
+							targetTemperatureHeat = state["value"]
+						if "HVAC_UserOperatingMode1" in state["service"] and state["variable"] == "ModeStatus":
+							deviceState = state["value"]
+						if state["variable"] == "OccupancyState":
+							occupancyState = state["value"]
+
+				else:	
+					# get home/ away mode and id of controller 
+					if "NestStructure" in device["device_type"]:
+						controllerId = device["id"]
+						for state in device["states"]:
+							if state["variable"] == "OccupancyState":
+								occupancyState = state["value"]
+
+	# add nest to dictionary
+	if deviceId is not None and controllerId is not None:
+		nests[deviceId] = Nest(deviceId,deviceName,roomName,deviceState,currentTemperature,targetTemperatureCool,targetTemperatureHeat, occupancyState, controllerId).__dict__
+	else:
+		raise Exception('Problem with Nest API')
+
+	return jsonify(**nests)
+
+@app.route("/nests/<int:id>", methods = ['GET'])
+def getNest(id):
+	if nests == {}:
+		listNests()
+	
+	p = { 'DeviceNum': id, 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+	states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
+	
+	for state in states:
+		if state["variable"] == "CurrentTemperature":
+			nests[str(id)]['currentTemperature'] = state["value"]
+		if "TemperatureSetpoint1_Cool" in state["service"] and state["variable"] == "CurrentSetpoint":
+			nests[str(id)]['targetTemperatureCool'] = state["value"]
+		if "TemperatureSetpoint1_Heat" in state["service"] and state["variable"] == "CurrentSetpoint":
+			nests[str(id)]['targetTemperatureHeat'] = state["value"]
+		if "HVAC_UserOperatingMode1" in state["service"] and state["variable"] == "ModeStatus":
+			nests[str(id)]['deviceState'] = state["value"]
+		if state["variable"] == "OccupancyState":
+			nests[str(id)]['occupancyState'] = state["value"]
+
+	# get state for controller
+	controllerId = nests[str(id)]['controllerId']
+	p = { 'DeviceNum': controllerId, 'rand': random.random() }
+	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+	controllerStates = json.loads(response.__dict__['_content'])['Device_Num_'+str(controllerId)]['states']
+	for state in controllerStates:
+		if state["variable"] == "OccupancyState":
+			nests[str(id)]['occupancyState'] = state["value"]
+
+	return jsonify(**nests[str(id)])
+
 
 @app.route("/away", methods = ['PUT'])
 def switchAway():
