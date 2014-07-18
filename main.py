@@ -29,7 +29,7 @@ def verifyLightState(id, targetState):
 		if lights[str(id)]['state'] == str(targetState):
 			return True
 		else:
-			time.sleep(0.1)
+			time.sleep(0.3)
 	return False
 
 def verifyLockState(id, targetState):
