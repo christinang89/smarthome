@@ -1,4 +1,5 @@
 from flask import *
+from flask.json import JSONEncoder
 from device import *
 import requests
 import random
@@ -6,7 +7,20 @@ import simplejson as json
 import os
 import time
 
+class CustomJSONEncoder(JSONEncoder):
+	def default(self, obj):
+		try:
+			if isinstance(obj, Device):
+				return obj.__dict__
+			iterable = iter(obj)
+		except TypeError:
+			print type(obj)
+		else:
+			return list(iterable)
+		return JSONEncoder.default(self, obj)
+
 app = Flask(__name__)
+app.json_encoder = CustomJSONEncoder
 
 global lights
 lights = {}
@@ -17,41 +31,14 @@ locks = {}
 global nests
 nests = {}
 
-def verifyLightState(id, targetState):
-	for i in range(50):
-		p = { 'DeviceNum': int(id), 'rand': random.random() }
-		response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
-		states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
-		
-		for state in states:
-			if state["variable"] == "Status":
-				lights[str(id)]['state'] = state["value"]
-		if lights[str(id)]['state'] == str(targetState):
-			return True
-		else:
-			time.sleep(0.3)
-	return False
 
-def verifyLockState(id, targetState):
-	for i in range(50):
-		p = { 'DeviceNum': int(id), 'rand': random.random() }
-		response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
-		states = json.loads(response.__dict__['_content'])['Device_Num_'+str(id)]['states']
-		
-		for state in states:
-			if state["variable"] == "Status":
-				locks[str(id)]['state'] = state["value"]
-		if locks[str(id)]['state'] == str(targetState):
-			return True
-		else:
-			time.sleep(0.5)
-	return False
-
-def changeAllState(targetLightState, targetLockState):
+def changeAllState(targetLightState, targetLockState, targetNestState):
 	if lights == {}:
 		listLights()
 	if locks == {}:
 		listLocks()
+	if nests == {}:
+		listNests()
 
 	# check inputs
 	if "password" not in request.get_json():
@@ -61,32 +48,40 @@ def changeAllState(targetLightState, targetLockState):
 		return jsonify(result = "error", message = "wrong password")
 	
 	for light in lights:
-		if lights[light]["state"] == str((targetLightState+1)%2):
-			p = { 'DeviceNum': int(light), 'newTargetValue': targetLightState, 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
-			if "ERROR" in response.__dict__['_content']:
-				return jsonify(result = "error", message = response.__dict__['_content'])
-			if not verifyLightState(light, targetLightState):
-				return jsonify(result = "error", message = "changing state of " + str(light) + " has timed out")
+		if lights[light].getState() != targetLightState:
+			change = lights[light].setState(targetLightState,"urn:upnp-org:serviceId:SwitchPower1")
+			if change is not True:
+				return change
 
 	for lock in locks:
-		if locks[lock]["state"] == str((targetLockState+1)%2):
-			p = { 'DeviceNum': int(lock), 'newTargetValue': targetLockState, 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
-			if "ERROR" in response.__dict__['_content']:
-				return jsonify(result = "error", message = response.__dict__['_content'])
-			if not verifyLockState(lock, targetLockState):
-				return jsonify(result = "error", message = "changing state of " + str(lock) + " has timed out")
+		if locks[lock].getState() != targetLockState:
+			change = locks[lock].setState(targetLockState,"urn:micasaverde-com:serviceId:DoorLock1")
+			if change is not True:
+				return change
 
-	if targetLightState == 1:
-		message = "Lights switched on"
-	else:
-		message = "Lights switched off"
+	for nest in nests:
+		if nests[nest].getState() != targetNestState:
+			if targetNestState == "1":
+				change = nests[nest].setState("NewOccupancyState", "Occupied", "urn:upnp-org:serviceId:HouseStatus1")
+			elif targetNestState == "0":
+				change = nests[nest].setState("NewOccupancyState", "Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
+			if change is not True:
+				return change
 
-	if targetLockState == 0:
-		message += " and doors unlocked"
+	if targetLightState == "1":
+		message = "Lights switched on, "
 	else:
-		message += " and doors locked"
+		message = "Lights switched off, "
+
+	if targetLockState == "0":
+		message += "Doors unlocked, "
+	else:
+		message += "Doors locked, "
+
+	if targetNestState == "1":
+		message += "and Nest set to Home mode."
+	else:
+		message += "and Nest set to Away mode."
 
 	return jsonify(result = "ok", message = message)
 	
@@ -125,7 +120,7 @@ def listLights():
 						deviceState = state["value"]
 
 				# add light to dictionary
-				lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceState).__dict__
+				lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceState)
 
 	return jsonify(**lights)
 
@@ -139,9 +134,9 @@ def getLight(id):
 	
 	for state in states:
 		if state["variable"] == "Status":
-			lights[str(id)]['state'] = state["value"]
+			lights[str(id)].updateState(state["value"])
 
-	return jsonify(**lights[str(id)])
+	return jsonify(**lights[str(id)].__dict__)
 
 @app.route("/lights/<int:id>", methods = ['PUT'])
 def putLight(id):
@@ -155,18 +150,12 @@ def putLight(id):
 	if "state" not in request.get_json():
 		return jsonify(result = "error", message = "state not specified")
 
-	# do the real shizz
-	p = { 'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
-	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:SwitchPower1&action=SetTarget", params = p)
-	
-	# return response
-	if "ERROR" not in response.__dict__['_content']:
-		if verifyLightState(id, request.get_json()['state']):
-			return jsonify(result = "ok", state = request.get_json()['state'])	
-		else:
-			return jsonify(result = "error", message = "switching state of " + str(id) + " has timed out")
+	change = lights[str(id)].setState(request.get_json()['state'],"urn:upnp-org:serviceId:SwitchPower1")
+
+	if change is not True:
+		return change
 	else:
-		return jsonify(result = "error", message = response.__dict__['_content'])
+		return jsonify(result = "ok", state = request.get_json()['state'])
 		
 
 @app.route("/locks", methods = ['GET'])
@@ -177,7 +166,6 @@ def listLocks():
 	devices = responseContent['devices']
 	rooms = responseContent['rooms']
 	roomNames = {}
-	#devices = json.loads(response.__dict__['_content'])['devices']
 
 	for room in rooms:
 		if room["id"] not in roomNames:
@@ -198,7 +186,7 @@ def listLocks():
 						deviceState = state["value"]
 
 				# add lock to dictionary
-				locks[device["id"]] = Lock(device["id"],device["name"],roomName,deviceState).__dict__
+				locks[device["id"]] = Lock(device["id"],device["name"],roomName,deviceState)
 
 	return jsonify(**locks)
 
@@ -213,15 +201,15 @@ def getLock(id):
 	
 	for state in states:
 		if state["variable"] == "Status" and "DoorLock" in state["service"]:
-			locks[str(id)]['state'] = state["value"]
+			locks[str(id)].updateState(state["value"])
 
-	return jsonify(**locks[str(id)])
+	return jsonify(**locks[str(id)].__dict__)
 
 @app.route("/locks/<int:id>", methods = ['PUT'])
 def putLock(id):
 	if locks == {}:
 		listLocks()
-	
+		
 	# check inputs
 	if str(id) not in locks:
 		return jsonify(result = "error", message = "not a lock")
@@ -234,19 +222,13 @@ def putLock(id):
 
 	if request.get_json()['password'] != os.environ['LOCKSECRET']:
 		return jsonify(result = "error", message = "wrong password")
-	
-	# do real stuff
-	p = { 'DeviceNum': id, 'newTargetValue': request.get_json()['state'], 'rand': random.random() }
-	response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:micasaverde-com:serviceId:DoorLock1&action=SetTarget", params = p)
-	
-	# return response
-	if "ERROR" not in response.__dict__['_content']:
-		if verifyLockState(id, request.get_json()['state']):
-			return jsonify(result = "ok", state = request.get_json()['state'])	
-		else:
-			return jsonify(result = "error", message = "switching state of " + str(id) + " has timed out")
+
+	change = locks[str(id)].setState(request.get_json()['state'],"urn:micasaverde-com:serviceId:DoorLock1")
+
+	if change is not True:
+		return change
 	else:
-		return jsonify(result = "error", message = response.__dict__['_content'])
+		return jsonify(result = "ok", state = request.get_json()['state'])
 
 
 @app.route("/nests", methods = ['GET'])
@@ -262,10 +244,7 @@ def listNests():
 		if room["id"] not in roomNames:
 			roomNames[room["id"]] = room["name"]
 
-	# devices = json.loads(response.__dict__['_content'])['devices']
-
 	for device in devices:
-
 		if "device_type" in device:
 			if "HVAC" in device["device_type"] or "NestStructure" in device["device_type"]:
 				if "HVAC" in device["device_type"]:
@@ -299,7 +278,7 @@ def listNests():
 
 	# add nest to dictionary
 	if deviceId is not None and controllerId is not None:
-		nests[deviceId] = Nest(deviceId,deviceName,roomName,currentTemperature,maxTemp,minTemp, controllerId, deviceState).__dict__
+		nests[deviceId] = Nest(deviceId,deviceName,roomName,currentTemperature,maxTemp,minTemp, controllerId, deviceState)
 	else:
 		raise Exception('Problem with Nest API')
 
@@ -316,25 +295,26 @@ def getNest(id):
 	
 	for state in states:
 		if state["variable"] == "CurrentTemperature":
-			nests[str(id)]['currentTemperature'] = state["value"]
+			nests[str(id)].updateCurrentTemp(state["value"])
 		if "TemperatureSetpoint1_Cool" in state["service"] and state["variable"] == "CurrentSetpoint":
-			nests[str(id)]['maxTemp'] = state["value"]
+			nests[str(id)].updateMaxTemp(state["value"])
 		if "TemperatureSetpoint1_Heat" in state["service"] and state["variable"] == "CurrentSetpoint":
-			nests[str(id)]['minTemp'] = state["value"]
+			nests[str(id)].updateMinTemp(state["value"])
 		
 	# get state for controller
-	controllerId = nests[str(id)]['controllerId']
+	controllerId = nests[str(id)].getControllerId()
+
 	p = { 'DeviceNum': controllerId, 'rand': random.random() }
 	response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
 	controllerStates = json.loads(response.__dict__['_content'])['Device_Num_'+str(controllerId)]['states']
 	for state in controllerStates:
 		if state["variable"] == "OccupancyState":
 			if state["value"] == "Occupied":
-				nests[str(id)]['state'] = "1"
+				nests[str(id)].updateState("1")
 			elif state["value"] == "Unoccupied":
-				nests[str(id)]['state'] = "0" 
+				nests[str(id)].updateState("0")
 
-	return jsonify(**nests[str(id)])
+	return jsonify(**nests[str(id)].__dict__)
 
 @app.route("/nests/<int:id>", methods = ['PUT'])
 def putNest(id):
@@ -358,41 +338,34 @@ def putNest(id):
 	if request.get_json()['password'] != os.environ['LOCKSECRET']:
 		return jsonify(result = "error", message = "wrong password")
 
+	# make the changes
 	if "minTemp" in request.get_json():
-		p = { 'DeviceNum': id, 'NewCurrentSetpoint': request.get_json()['minTemp'], 'rand': random.random() }
-		response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:TemperatureSetpoint1_Heat&action=SetCurrentSetpoint", params = p)
-		
-		if "ERROR" in response.__dict__['_content']:
-			return jsonify(result = "error", message = response.__dict__['_content'])
+		change = nests[str(id)].setTemp(request.get_json()['minTemp'],"urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
+		if change is not True:
+			return change
 
 	if "maxTemp" in request.get_json():
-		p = { 'DeviceNum': id, 'NewCurrentSetpoint': request.get_json()['maxTemp'], 'rand': random.random() }
-		response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:TemperatureSetpoint1_Cool&action=SetCurrentSetpoint", params = p)
-
-		if "ERROR" in response.__dict__['_content']:
-			return jsonify(result = "error", message = response.__dict__['_content'])
+		change = nests[str(id)].setTemp(request.get_json()['maxTemp'],"urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
+		if change is not True:
+			return change
 
 	if "state" in request.get_json():
-		if request.get_json()['state'] == 0:
-			p = { 'DeviceNum': int(nests[str(id)]['controllerId']) , 'NewOccupancyState': 'Unoccupied', 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:HouseStatus1&action=SetOccupancyState", params = p)
-		elif request.get_json()['state'] == 1:
-			p = { 'DeviceNum': int(nests[str(id)]['controllerId']), 'NewOccupancyState': 'Occupied', 'rand': random.random() }
-			response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&serviceId=urn:upnp-org:serviceId:HouseStatus1&action=SetOccupancyState", params = p)
-
-		if "ERROR" in response.__dict__['_content']:
-			return jsonify(result = "error", message = response.__dict__['_content'])
+		if request.get_json()['state'] == "0":
+			change = nests[str(id)].setState("NewOccupancyState", "Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
+		elif request.get_json()['state'] == "1":
+			change = nests[str(id)].setState("NewOccupancyState", "Occupied", "urn:upnp-org:serviceId:HouseStatus1")
+		if change is not True:
+			return change
 
 	return jsonify(result = "ok", message = "All changes made")
 
 @app.route("/away", methods = ['PUT'])
 def switchAway():
-	return changeAllState(0,1)
+	return changeAllState("0","1","0")
 
 @app.route("/home", methods = ['PUT'])
 def switchHome():
-	return changeAllState(1,0)
-
+	return changeAllState("1","0","1")
 
 # gunicorn stuff here
 from werkzeug.contrib.fixers import ProxyFix
