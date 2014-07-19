@@ -27,7 +27,7 @@ class Device():
         self.state = newState
 
     def verifyState(self, targetState):
-        for i in range(100):
+        for i in range(500):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
@@ -38,7 +38,7 @@ class Device():
             if self.state == str(targetState):
                 return True
             else:
-                time.sleep(0.5)
+                time.sleep(0.3)
         return False
 
     def setState(self, targetState, serviceName):
@@ -96,7 +96,7 @@ class Nest(Device):
         return self.controllerId
 
     def verifyTemp(self, targetTemp, varType):
-        for i in range(100):
+        for i in range(500):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
@@ -142,7 +142,7 @@ class Nest(Device):
             return jsonify(result = "error", message = response.__dict__['_content'])
 
     def verifyState(self, targetState):
-        for i in range(100):
+        for i in range(500):
             p = { 'DeviceNum': self.controllerId, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.controllerId)]['states']
