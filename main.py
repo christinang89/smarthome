@@ -317,11 +317,16 @@ def putNest(id):
 
 	return jsonify(result = "OK", message = "All changes made")
 
-@app.route("/save", methods = ['PUT'])
-def saveCurrentState():
-	if "slot" not in request.get_json():
-		return jsonify(result = "Error", message = "slot not defined")
+@app.route("/states", methods = ['GET'])
+def listStates():
+	return json.dumps(redis.keys())
 
+@app.route("/states/<string:slot>", methods = ['GET'])
+def getState(slot):
+	return jsonify(json.loads(redis.get(slot), object_hook=deviceDecoder))
+
+@app.route("/states/<string:slot>", methods = ['PUT'])
+def saveCurrentState(slot):
 	if "password" not in request.get_json():
 		return jsonify(result = "Error", message = "Password not specified")
 
@@ -339,12 +344,19 @@ def saveCurrentState():
 	for nest in nests:
 		verdeDevices[nest] = nests[nest]
 
-	redis.set(request.get_json()['slot'],json.dumps(verdeDevices, cls=CustomJSONEncoder))
+	redis.set(slot,json.dumps(verdeDevices, cls=CustomJSONEncoder))
 
-	return jsonify(result = "OK", message = request.get_json()['slot'] + " state saved")
+	return jsonify(result = "OK", message = slot + " state saved")
 
-@app.route("/load/<string:slot>", methods = ['GET'])
+
+@app.route("/states/load/<string:slot>", methods = ['PUT'])
 def loadState(slot):
+	if "password" not in request.get_json():
+		return jsonify(result = "Error", message = "Password not specified")
+
+	if request.get_json()['password'] != os.environ['LOCKSECRET']:
+		return jsonify(result = "Error", message = "Wrong password")
+
 	listLights()
 	listLocks()
 	listNests()
