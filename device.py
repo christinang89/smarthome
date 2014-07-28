@@ -30,7 +30,7 @@ class Device():
         self.state = newState
 
     def verifyState(self, targetState):
-        for i in range(500):
+        for i in range(80):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
@@ -105,7 +105,7 @@ class Nest(Device):
         return self.maxTemp
 
     def verifyTemp(self, targetMinTemp, targetMaxTemp):
-        for i in range(500):
+        for i in range(30):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
@@ -118,12 +118,7 @@ class Nest(Device):
                 if "TemperatureSetpoint1_Cool" in state["service"] and state["variable"] == "CurrentSetpoint":
                     self.maxTemp = state["value"]
 
-            if self.minTemp == targetMinTemp:
-                return True
-            else:
-                time.sleep(0.3)
-
-            if self.maxTemp == targetMaxTemp:
+            if str(self.minTemp) == str(targetMinTemp) and str(self.maxTemp) == str(targetMaxTemp):
                 return True
             else:
                 time.sleep(0.3)
