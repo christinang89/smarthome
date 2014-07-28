@@ -18,10 +18,13 @@ class Device():
         self.state = state
 
     def __repr__(self):
-        return jsonify({"id": self.id, "name": self.name, "room": self.room, "state": self.state})
+        return json.dumps({"id": self.id, "name": self.name, "room": self.room, "state": self.state})
 
     def getState(self):
         return self.state
+
+    def getId(self):
+        return self.id
 
     def updateState(self, newState):
         self.state = newState
@@ -81,7 +84,7 @@ class Nest(Device):
         self.controllerId = controllerId
 
     def __repr__(self):
-        return jsonify({"id": self.id, "name": self.name, "room": self.room, "currentTemp": self.currentTemp, "maxTemp": self.maxTemp, "minTemp": self.minTemp, "controllerId": self.controllerId, "state": self.state})
+        return json.dumps({"id": self.id, "name": self.name, "room": self.room, "currentTemp": self.currentTemp, "maxTemp": self.maxTemp, "minTemp": self.minTemp, "controllerId": self.controllerId, "state": self.state})
 
     def updateCurrentTemp(self, newCurrentTemp):
         self.currentTemp = newCurrentTemp
@@ -94,6 +97,12 @@ class Nest(Device):
 
     def getControllerId(self):
         return self.controllerId
+
+    def getMinTemp(self):
+        return self.minTemp
+
+    def getMaxTemp(self):
+        return self.maxTemp
 
     def verifyTemp(self, targetTemp, varType):
         for i in range(500):
@@ -167,9 +176,9 @@ class Nest(Device):
 
         return False
 
-    def setState(self, changeType, targetState, serviceName):
+    def setState(self, targetState, serviceName):
         # set state
-        p = { 'serviceId': serviceName, 'DeviceNum': self.controllerId, str(changeType): targetState, 'rand': random.random() }
+        p = { 'serviceId': serviceName, 'DeviceNum': self.controllerId, 'NewOccupancyState': targetState, 'rand': random.random() }
         response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&action=SetOccupancyState", params = p)
 
         # return response

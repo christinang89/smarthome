@@ -6,18 +6,33 @@ import random
 import simplejson as json
 import os
 import time
+import redis
+
+redis = redis.Redis("localhost")
 
 class CustomJSONEncoder(JSONEncoder):
 	def default(self, obj):
 		try:
 			if isinstance(obj, Device):
-				return obj.__dict__
+				deviceDict = obj.__dict__
+				deviceDict['_type'] = obj.__class__.__name__
+				return deviceDict
 			iterable = iter(obj)
 		except TypeError:
 			print type(obj)
 		else:
 			return list(iterable)
 		return JSONEncoder.default(self, obj)
+
+def deviceDecoder(dct):
+	if '_type' in dct:
+		if dct['_type'] == "Light":
+			return Light(dct["id"],dct["name"],dct["room"],dct["state"])
+		elif dct['_type'] == "Lock":
+			return Lock(dct["id"],dct["name"],dct["room"],dct["state"])
+		elif dct['_type'] == "Nest":
+			return Nest(dct["id"],dct["name"],dct["room"], dct["currentTemp"], dct["maxTemp"], dct["minTemp"], dct["controllerId"], dct["state"])
+	return dct
 
 app = Flask(__name__)
 app.json_encoder = CustomJSONEncoder
@@ -31,60 +46,69 @@ locks = {}
 global nests
 nests = {}
 
+global verdeDevices
+verdeDevices = {}
 
-def changeAllState(targetLightState, targetLockState, targetNestState):
-	if lights == {}:
-		listLights()
-	if locks == {}:
-		listLocks()
-	if nests == {}:
-		listNests()
 
-	# check inputs
-	if "password" not in request.get_json():
-		return jsonify(result = "error", message = "password not specified")
+@app.route("/save", methods = ['PUT'])
+def saveCurrentState():
+	if 'slot' not in request.get_json():
+		return jsonify(result = "error", message = "slot not defined")
 
-	if request.get_json()['password'] != os.environ['LOCKSECRET']:
-		return jsonify(result = "error", message = "wrong password")
-	
+	listLights()
+	listLocks()
+	listNests()
+
 	for light in lights:
-		if lights[light].getState() != targetLightState:
-			change = lights[light].setState(targetLightState,"urn:upnp-org:serviceId:SwitchPower1")
-			if change is not True:
-				return change
-
+		verdeDevices[light] = lights[light]
 	for lock in locks:
-		if locks[lock].getState() != targetLockState:
-			change = locks[lock].setState(targetLockState,"urn:micasaverde-com:serviceId:DoorLock1")
-			if change is not True:
-				return change
-
+		verdeDevices[lock] = locks[lock]
 	for nest in nests:
-		if nests[nest].getState() != targetNestState:
-			if targetNestState == "1":
-				change = nests[nest].setState("NewOccupancyState", "Occupied", "urn:upnp-org:serviceId:HouseStatus1")
-			elif targetNestState == "0":
-				change = nests[nest].setState("NewOccupancyState", "Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
-			if change is not True:
-				return change
+		verdeDevices[nest] = nests[nest]
 
-	if targetLightState == "1":
-		message = "Lights switched on, "
-	else:
-		message = "Lights switched off, "
+	redis.set(request.get_json()['slot'],json.dumps(verdeDevices, cls=CustomJSONEncoder))
 
-	if targetLockState == "0":
-		message += "Doors unlocked, "
-	else:
-		message += "Doors locked, "
+	return jsonify(result = "ok", message = request.get_json()['slot'] + " state saved")
 
-	if targetNestState == "1":
-		message += "and Nest set to Home mode."
-	else:
-		message += "and Nest set to Away mode."
+@app.route("/load/<string:slot>", methods = ['GET'])
+def loadState(slot):
+	listLights()
+	listLocks()
+	listNests()
 
-	return jsonify(result = "ok", message = message)
-	
+	savedStates = json.loads(redis.get(slot), object_hook=deviceDecoder)
+
+	for savedState in savedStates:
+		if isinstance(savedStates[savedState], Light):
+			if savedStates[savedState].getState() != lights[savedStates[savedState].getId()].getState():
+				change = lights[savedStates[savedState].getId()].setState(savedStates[savedState].getState(), "urn:upnp-org:serviceId:SwitchPower1")
+				if change is not True:
+					return change
+		elif isinstance(savedStates[savedState], Lock):
+			if savedStates[savedState].getState() != locks[savedStates[savedState].getId()].getState():
+				change = locks[savedStates[savedState].getId()].setState(savedStates[savedState].getState(), "urn:micasaverde-com:serviceId:DoorLock1")
+				if change is not True:
+					return change
+		elif isinstance(savedStates[savedState], Nest):
+			if savedStates[savedState].getMinTemp() != nests[savedStates[savedState].getId()].getMinTemp():
+				change = nests[savedStates[savedState].getId()].setTemp(savedStates[savedState].getMinTemp(), "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
+				if change is not True:
+					return change
+			if savedStates[savedState].getMaxTemp() != nests[savedStates[savedState].getId()].getMaxTemp():
+				change = nests[savedStates[savedState].getId()].setTemp(savedStates[savedState].getMaxTemp(), "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
+				if change is not True:
+					return change
+			if savedStates[savedState].getState() != nests[savedStates[savedState].getId()].getState():
+				if savedStates[savedState].getState() == "0":
+					change = nests[savedStates[savedState].getId()].setState("Unoccupied", "urn:micasaverde-com:serviceId:DoorLock1")
+					if change is not True:
+						return change
+				elif savedStates[savedState].getState() == "1":
+					change = nests[savedStates[savedState].getId()].setState("Occupied", "urn:upnp-org:serviceId:HouseStatus1")
+					if change is not True:
+						return change
+
+	return jsonify(**savedStates)
 
 @app.route("/")
 def hello():
@@ -102,8 +126,6 @@ def listLights():
 	for room in rooms:
 		if room["id"] not in roomNames:
 			roomNames[room["id"]] = room["name"]
-
-	# devices = json.loads(response.__dict__['_content'])['devices']
 
 	for device in devices:
 		if "device_type" in device:
@@ -150,7 +172,7 @@ def putLight(id):
 	if "state" not in request.get_json():
 		return jsonify(result = "error", message = "state not specified")
 
-	change = lights[str(id)].setState(request.get_json()['state'],"urn:upnp-org:serviceId:SwitchPower1")
+	change = lights[str(id)].setState(request.get_json()['state'], "urn:upnp-org:serviceId:SwitchPower1")
 
 	if change is not True:
 		return change
@@ -207,9 +229,6 @@ def getLock(id):
 
 @app.route("/locks/<int:id>", methods = ['PUT'])
 def putLock(id):
-	if locks == {}:
-		listLocks()
-		
 	# check inputs
 	if str(id) not in locks:
 		return jsonify(result = "error", message = "not a lock")
@@ -223,7 +242,7 @@ def putLock(id):
 	if request.get_json()['password'] != os.environ['LOCKSECRET']:
 		return jsonify(result = "error", message = "wrong password")
 
-	change = locks[str(id)].setState(request.get_json()['state'],"urn:micasaverde-com:serviceId:DoorLock1")
+	change = locks[str(id)].setState(request.get_json()['state'], "urn:micasaverde-com:serviceId:DoorLock1")
 
 	if change is not True:
 		return change
@@ -318,9 +337,6 @@ def getNest(id):
 
 @app.route("/nests/<int:id>", methods = ['PUT'])
 def putNest(id):
-	if nests == {}:
-		listNests()
-
 	# check inputs
 	if str(id) not in nests:
 		return jsonify(result = "error", message = "not a Nest")
@@ -340,24 +356,78 @@ def putNest(id):
 
 	# make the changes
 	if "minTemp" in request.get_json():
-		change = nests[str(id)].setTemp(request.get_json()['minTemp'],"urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
+		change = nests[str(id)].setTemp(request.get_json()['minTemp'], "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
 		if change is not True:
 			return change
 
 	if "maxTemp" in request.get_json():
-		change = nests[str(id)].setTemp(request.get_json()['maxTemp'],"urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
+		change = nests[str(id)].setTemp(request.get_json()['maxTemp'], "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
 		if change is not True:
 			return change
 
 	if "state" in request.get_json():
 		if request.get_json()['state'] == "0":
-			change = nests[str(id)].setState("NewOccupancyState", "Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
+			change = nests[str(id)].setState("Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
 		elif request.get_json()['state'] == "1":
-			change = nests[str(id)].setState("NewOccupancyState", "Occupied", "urn:upnp-org:serviceId:HouseStatus1")
+			change = nests[str(id)].setState("Occupied", "urn:upnp-org:serviceId:HouseStatus1")
 		if change is not True:
 			return change
 
 	return jsonify(result = "ok", message = "All changes made")
+
+def changeAllState(targetLightState, targetLockState, targetNestState):
+
+	if lights == {}:
+		listLights()
+	if locks == {}:
+		listLocks()
+	if nests == {}:
+		listNests()
+
+	# check inputs
+	if "password" not in request.get_json():
+		return jsonify(result = "error", message = "password not specified")
+
+	if request.get_json()['password'] != os.environ['LOCKSECRET']:
+		return jsonify(result = "error", message = "wrong password")
+	
+	for light in lights:
+		if lights[light].getState() != targetLightState:
+			change = lights[light].setState(targetLightState,"urn:upnp-org:serviceId:SwitchPower1")
+			if change is not True:
+				return change
+
+	for lock in locks:
+		if locks[lock].getState() != targetLockState:
+			change = locks[lock].setState(targetLockState,"urn:micasaverde-com:serviceId:DoorLock1")
+			if change is not True:
+				return change
+
+	for nest in nests:
+		if nests[nest].getState() != targetNestState:
+			if targetNestState == "1":
+				change = nests[nest].setState("Occupied", "urn:upnp-org:serviceId:HouseStatus1")
+			elif targetNestState == "0":
+				change = nests[nest].setState("Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
+			if change is not True:
+				return change
+
+	if targetLightState == "1":
+		message = "Lights switched on, "
+	else:
+		message = "Lights switched off, "
+
+	if targetLockState == "0":
+		message += "Doors unlocked, "
+	else:
+		message += "Doors locked, "
+
+	if targetNestState == "1":
+		message += "and Nest set to Home mode."
+	else:
+		message += "and Nest set to Away mode."
+
+	return jsonify(result = "ok", message = message)
 
 @app.route("/away", methods = ['PUT'])
 def switchAway():
@@ -382,4 +452,3 @@ app.logger.addHandler(file_handler)
 
 if __name__ == "__main__":
     app.run(debug = True, host='0.0.0.0')
-
