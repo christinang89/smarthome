@@ -105,7 +105,7 @@ class Nest(Device):
         return self.maxTemp
 
     def verifyTemp(self, targetMinTemp, targetMaxTemp):
-        for i in range(30):
+        for i in range(45):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
             states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
