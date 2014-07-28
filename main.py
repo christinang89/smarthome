@@ -319,8 +319,14 @@ def putNest(id):
 
 @app.route("/save", methods = ['PUT'])
 def saveCurrentState():
-	if 'slot' not in request.get_json():
+	if "slot" not in request.get_json():
 		return jsonify(result = "Error", message = "slot not defined")
+
+	if "password" not in request.get_json():
+		return jsonify(result = "Error", message = "Password not specified")
+
+	if request.get_json()['password'] != os.environ['LOCKSECRET']:
+		return jsonify(result = "Error", message = "Wrong password")
 
 	listLights()
 	listLocks()
