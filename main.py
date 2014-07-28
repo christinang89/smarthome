@@ -363,7 +363,7 @@ def loadState(slot):
 					return change
 			if savedStates[savedState].getState() != nests[savedStates[savedState].getId()].getState():
 				if savedStates[savedState].getState() == "0":
-					change = nests[savedStates[savedState].getId()].setState("Unoccupied", "urn:micasaverde-com:serviceId:DoorLock1")
+					change = nests[savedStates[savedState].getId()].setState("Unoccupied", "urn:upnp-org:serviceId:HouseStatus1")
 					if change is not True:
 						return change
 				elif savedStates[savedState].getState() == "1":
