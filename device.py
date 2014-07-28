@@ -104,7 +104,7 @@ class Nest(Device):
     def getMaxTemp(self):
         return self.maxTemp
 
-    def verifyTemp(self, targetTemp, varType):
+    def verifyTemp(self, targetMinTemp, targetMaxTemp):
         for i in range(500):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
             response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
@@ -118,38 +118,38 @@ class Nest(Device):
                 if "TemperatureSetpoint1_Cool" in state["service"] and state["variable"] == "CurrentSetpoint":
                     self.maxTemp = state["value"]
 
-            if varType == "Heat":
-                if self.minTemp == str(targetTemp):
-                    return True
-                else:
-                    time.sleep(0.3)
-            elif varType == "Cool":
-                if self.maxTemp == str(targetTemp):
-                    return True
-                else:
-                    time.sleep(0.3)
+            if self.minTemp == targetMinTemp:
+                return True
+            else:
+                time.sleep(0.3)
+
+            if self.maxTemp == targetMaxTemp:
+                return True
+            else:
+                time.sleep(0.3)
+
         return False
 
-    def setTemp(self, targetState, serviceName):
-        # set state
-        p = { 'serviceId': serviceName, 'DeviceNum': self.id, 'NewCurrentSetpoint': targetState, 'rand': random.random() }
-        response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&action=SetCurrentSetpoint", params = p)
+    def setTemp(self, targetMinTemp, targetMaxTemp):
+        if targetMinTemp != self.minTemp:
+            #set temp
+            p = { 'DeviceNum': self.id, 'NewCurrentSetpoint': targetMinTemp, 'rand': random.random() }
+            response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&action=SetCurrentSetpoint&serviceId=urn:upnp-org:serviceId:TemperatureSetpoint1_Heat", params = p)
+            if "ERROR" in response.__dict__['_content']:
+                return jsonify(result = "Error", message = response.__dict__['_content'])
 
-        # return response
-        if "ERROR" not in response.__dict__['_content']:
-            if "Heat" in serviceName:
-                if self.verifyTemp(targetState, "Heat"):
-                    return True
-                else:
-                    return jsonify(result = "Error", message = "Switching temp of " + str(self.id) + " has timed out")
-            elif "Cool" in serviceName:
-                if self.verifyTemp(targetState, "Cool"):
-                    return True
-                else:
-                    return jsonify(result = "Error", message = "Switching temp of " + str(self.id) + " has timed out")
+        if targetMaxTemp != self.maxTemp:
+            #set temp
+            p = { 'DeviceNum': self.id, 'NewCurrentSetpoint': targetMaxTemp, 'rand': random.random() }
+            response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&action=SetCurrentSetpoint&serviceId=urn:upnp-org:serviceId:TemperatureSetpoint1_Cool", params = p)
+            if "ERROR" in response.__dict__['_content']:
+                return jsonify(result = "Error", message = response.__dict__['_content'])
+
+        if self.verifyTemp(targetMinTemp, targetMaxTemp):
+            return True
         else:
-            return jsonify(result = "Error", message = response.__dict__['_content'])
-
+            return jsonify(result = "Error", message = "Switching temp of " + str(self.id) + " has timed out")
+            
     def verifyState(self, targetState):
         for i in range(500):
             p = { 'DeviceNum': self.controllerId, 'rand': random.random() }

@@ -294,13 +294,16 @@ def putNest(id):
 		return jsonify(result = "Error", message = "Wrong password")
 
 	# make the changes
-	if "minTemp" in request.get_json():
-		change = nests[str(id)].setTemp(request.get_json()['minTemp'], "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
+	if "minTemp" in request.get_json() and "maxTemp" in request.get_json():
+		change = nests[str(id)].setTemp(request.get_json()['minTemp'], request.get_json()['maxTemp'])
 		if change is not True:
 			return change
-
-	if "maxTemp" in request.get_json():
-		change = nests[str(id)].setTemp(request.get_json()['maxTemp'], "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
+	elif "minTemp" in request.get_json() and "maxTemp" not in request.get_json():
+		change = nests[str(id)].setTemp(request.get_json()['minTemp'], nests[str(id)].getMaxTemp())
+		if change is not True:
+			return change
+	elif "minTemp" not in request.get_json() and "maxTemp" in request.get_json():
+		change = nests[str(id)].setTemp(nests[str(id)].getMinTemp(), request.get_json()['maxTemp'])
 		if change is not True:
 			return change
 
@@ -354,12 +357,8 @@ def loadState(slot):
 				if change is not True:
 					return change
 		elif isinstance(savedStates[savedState], Nest):
-			if savedStates[savedState].getMinTemp() != nests[savedStates[savedState].getId()].getMinTemp():
-				change = nests[savedStates[savedState].getId()].setTemp(savedStates[savedState].getMinTemp(), "urn:upnp-org:serviceId:TemperatureSetpoint1_Heat")
-				if change is not True:
-					return change
-			if savedStates[savedState].getMaxTemp() != nests[savedStates[savedState].getId()].getMaxTemp():
-				change = nests[savedStates[savedState].getId()].setTemp(savedStates[savedState].getMaxTemp(), "urn:upnp-org:serviceId:TemperatureSetpoint1_Cool")
+			if savedStates[savedState].getMinTemp() != nests[savedStates[savedState].getId()].getMinTemp() or savedStates[savedState].getMaxTemp() != nests[savedStates[savedState].getId()].getMaxTemp():
+				change = nests[savedStates[savedState].getId()].setTemp(savedStates[savedState].getMinTemp(), savedStates[savedState].getMaxTemp())
 				if change is not True:
 					return change
 			if savedStates[savedState].getState() != nests[savedStates[savedState].getId()].getState():
