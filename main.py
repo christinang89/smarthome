@@ -106,17 +106,17 @@ def putLight(id):
 
 	# check inputs
 	if str(id) not in lights:
-		return jsonify(result = "error", message = "Not a light")
+		return jsonify(result = "Error", message = "Not a light")
 
 	if "state" not in request.get_json():
-		return jsonify(result = "error", message = "State not specified")
+		return jsonify(result = "Error", message = "State not specified")
 
 	change = lights[str(id)].setState(request.get_json()['state'], "urn:upnp-org:serviceId:SwitchPower1")
 
 	if change is not True:
 		return change
 	else:
-		return jsonify(result = "ok", state = request.get_json()['state'])
+		return jsonify(result = "OK", state = request.get_json()['state'])
 		
 
 @app.route("/locks", methods = ['GET'])
@@ -170,23 +170,23 @@ def getLock(id):
 def putLock(id):
 	# check inputs
 	if str(id) not in locks:
-		return jsonify(result = "error", message = "Not a lock")
+		return jsonify(result = "Error", message = "Not a lock")
 
 	if "state" not in request.get_json():
-		return jsonify(result = "error", message = "State not specified")
+		return jsonify(result = "Error", message = "State not specified")
 
 	if "password" not in request.get_json():
-		return jsonify(result = "error", message = "Password not specified")
+		return jsonify(result = "Error", message = "Password not specified")
 
 	if request.get_json()['password'] != os.environ['LOCKSECRET']:
-		return jsonify(result = "error", message = "Wrong password")
+		return jsonify(result = "Error", message = "Wrong password")
 
 	change = locks[str(id)].setState(request.get_json()['state'], "urn:micasaverde-com:serviceId:DoorLock1")
 
 	if change is not True:
 		return change
 	else:
-		return jsonify(result = "ok", state = request.get_json()['state'])
+		return jsonify(result = "OK", state = request.get_json()['state'])
 
 
 @app.route("/nests", methods = ['GET'])
@@ -278,20 +278,20 @@ def getNest(id):
 def putNest(id):
 	# check inputs
 	if str(id) not in nests:
-		return jsonify(result = "error", message = "Not a Nest")
+		return jsonify(result = "Error", message = "Not a Nest")
 
 	if "maxTemp" not in request.get_json() and "minTemp" not in request.get_json() and "state" not in request.get_json():
-		return jsonify(result = "error", message = "No change specified")
+		return jsonify(result = "Error", message = "No change specified")
 
 	if "maxTemp" in request.get_json() and "minTemp" in request.get_json():
 		if request.get_json()['maxTemp'] < request.get_json()['minTemp']:
-			return jsonify(result = "error", message = "Max temp cannot be lower than min temp")
+			return jsonify(result = "Error", message = "Max temp cannot be lower than min temp")
 
 	if "password" not in request.get_json():
-		return jsonify(result = "error", message = "Password not specified")
+		return jsonify(result = "Error", message = "Password not specified")
 
 	if request.get_json()['password'] != os.environ['LOCKSECRET']:
-		return jsonify(result = "error", message = "Wrong password")
+		return jsonify(result = "Error", message = "Wrong password")
 
 	# make the changes
 	if "minTemp" in request.get_json():
@@ -312,12 +312,12 @@ def putNest(id):
 		if change is not True:
 			return change
 
-	return jsonify(result = "ok", message = "All changes made")
+	return jsonify(result = "OK", message = "All changes made")
 
 @app.route("/save", methods = ['PUT'])
 def saveCurrentState():
 	if 'slot' not in request.get_json():
-		return jsonify(result = "error", message = "slot not defined")
+		return jsonify(result = "Error", message = "slot not defined")
 
 	listLights()
 	listLocks()
@@ -332,7 +332,7 @@ def saveCurrentState():
 
 	redis.set(request.get_json()['slot'],json.dumps(verdeDevices, cls=CustomJSONEncoder))
 
-	return jsonify(result = "ok", message = request.get_json()['slot'] + " state saved")
+	return jsonify(result = "OK", message = request.get_json()['slot'] + " state saved")
 
 @app.route("/load/<string:slot>", methods = ['GET'])
 def loadState(slot):
@@ -372,7 +372,7 @@ def loadState(slot):
 					if change is not True:
 						return change
 
-	return jsonify(result = "ok", message = "All states restored")
+	return jsonify(result = "OK", message = "All states restored")
 
 # gunicorn stuff here
 from werkzeug.contrib.fixers import ProxyFix

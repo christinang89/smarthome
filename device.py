@@ -54,9 +54,9 @@ class Device():
             if self.verifyState(targetState):
                 return True
             else:
-                return jsonify(result = "error", message = "switching state of " + str(self.id) + " has timed out")
+                return jsonify(result = "Error", message = "Switching state of " + str(self.id) + " has timed out")
         else:
-            return jsonify(result = "error", message = response.__dict__['_content'])
+            return jsonify(result = "Error", message = response.__dict__['_content'])
 
 # class light inherits from device
 class Light(Device):
@@ -141,14 +141,14 @@ class Nest(Device):
                 if self.verifyTemp(targetState, "Heat"):
                     return True
                 else:
-                    return jsonify(result = "error", message = "switching temp of " + str(self.id) + " has timed out")
+                    return jsonify(result = "Error", message = "Switching temp of " + str(self.id) + " has timed out")
             elif "Cool" in serviceName:
                 if self.verifyTemp(targetState, "Cool"):
                     return True
                 else:
-                    return jsonify(result = "error", message = "switching temp of " + str(self.id) + " has timed out")
+                    return jsonify(result = "Error", message = "Switching temp of " + str(self.id) + " has timed out")
         else:
-            return jsonify(result = "error", message = response.__dict__['_content'])
+            return jsonify(result = "Error", message = response.__dict__['_content'])
 
     def verifyState(self, targetState):
         for i in range(500):
@@ -186,6 +186,6 @@ class Nest(Device):
             if self.verifyState(targetState):
                 return True
             else:
-                return jsonify(result = "error", message = "switching state of " + str(self.id) + " has timed out")
+                return jsonify(result = "Error", message = "Switching state of " + str(self.id) + " has timed out")
         else:
-            return jsonify(result = "error", message = response.__dict__['_content'])
+            return jsonify(result = "Error", message = response.__dict__['_content'])
