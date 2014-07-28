@@ -49,6 +49,9 @@ nests = {}
 global verdeDevices
 verdeDevices = {}
 
+global smarthomeState 
+smarthomeState = "smarthome_state_"
+
 @app.route("/")
 def hello():
     return "Hello World!"
@@ -319,14 +322,20 @@ def putNest(id):
 
 @app.route("/states", methods = ['GET'])
 def listStates():
-	return json.dumps(redis.keys())
+	keys = redis.keys(smarthomeState+"*")
+	result = []
+	for key in keys:
+		result.append(key[len(smarthomeState):])
+	return json.dumps(result)
 
 @app.route("/states/<string:slot>", methods = ['GET'])
 def getState(slot):
+	slot = smarthomeState + slot
 	return jsonify(json.loads(redis.get(slot), object_hook=deviceDecoder))
 
 @app.route("/states/<string:slot>", methods = ['PUT'])
 def saveCurrentState(slot):
+	slot = smarthomeState + slot
 	if "password" not in request.get_json():
 		return jsonify(result = "Error", message = "Password not specified")
 
@@ -351,6 +360,7 @@ def saveCurrentState(slot):
 
 @app.route("/states/load/<string:slot>", methods = ['PUT'])
 def loadState(slot):
+	slot = smarthomeState + slot
 	if "password" not in request.get_json():
 		return jsonify(result = "Error", message = "Password not specified")
 
