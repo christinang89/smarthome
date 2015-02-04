@@ -152,6 +152,9 @@ def putLightBrightness(id):
     # check inputs
     if str(id) not in lights:
         return jsonify(result = "Error", message = "Not a light")
+        
+    if lights[str(id)].brightness == None:
+        return jsonify(result = "Error", message = "Does not have brightness")
 
     if "brightness" not in request.get_json():
         return jsonify(result = "Error", message = "Brightness not specified")

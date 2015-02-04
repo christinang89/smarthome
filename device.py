@@ -111,8 +111,6 @@ class Light(Device):
                 time.sleep(0.3)
         return False
 
-    pass
-
 # class lock inherits from device
 class Lock(Device):
     pass
