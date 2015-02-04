@@ -28,7 +28,8 @@ class CustomJSONEncoder(JSONEncoder):
 def deviceDecoder(dct):
     if '_type' in dct:
         if dct['_type'] == "Light":
-            return Light(dct["id"],dct["name"],dct["room"],dct["state"])
+            # Is this the right way to do this? I don't use the Lock or Nest functions so this does not get called in my installation.
+            return Light(dct["id"],dct["name"],dct["room"],dct["state"],dct["brightness"])
         elif dct['_type'] == "Lock":
             return Lock(dct["id"],dct["name"],dct["room"],dct["state"])
         elif dct['_type'] == "Nest":
@@ -90,17 +91,15 @@ def listLights():
                     roomName = roomNames[int(device["room"])]
 
                 # get device state
-                brightness = 0
-                hasBrightness = False
+                brightness = None
                 for state in device["states"]:
                     if state["variable"] == "Status":
                         deviceState = state["value"]
                     if state["variable"] == "LoadLevelStatus":
                         brightness = state["value"]
-                        hasBrightness = True
 
                 # add light to dictionary
-                lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceState,hasBrightness,brightness)
+                lights[device["id"]] = Light(device["id"],device["name"],roomName,deviceState,brightness)
 
     return jsonify(**lights)
 
