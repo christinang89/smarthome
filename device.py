@@ -1,3 +1,4 @@
+﻿#!/usr/bin/env python
 from flask import *
 import requests
 import simplejson as json
@@ -28,7 +29,7 @@ class Device():
 
     def updateState(self, newState):
         self.state = newState
-
+        
     def verifyState(self, targetState):
         for i in range(80):
             p = { 'DeviceNum': self.id, 'rand': random.random() }
@@ -54,13 +55,61 @@ class Device():
             if self.verifyState(targetState):
                 return True
             else:
-                return jsonify(result = "Error", message = "Switching state of " + str(self.id) + " has timed out")
+                return jsonify(result = "Error", message = "Switching state of " + str(self.name) + "(" + str(self.id) + ") has timed out")
         else:
             return jsonify(result = "Error", message = response.__dict__['_content'])
 
 # class light inherits from device
 class Light(Device):
-    pass
+    brightness = None
+
+    def __init__(self, id, name, room, state, brightness):
+        self.id = id
+        self.name = name
+        self.room = room
+        self.state = state
+        self.brightness = brightness
+
+    def __repr__(self):
+        if self.brightness == None:
+            return json.dumps({"id": self.id, "name": self.name, "room": self.room, "state": self.state, "brightness": self.brightness})
+        else:
+            return json.dumps({"id": self.id, "name": self.name, "room": self.room, "state": self.state})
+        
+    def getBrightness(self):
+        return self.brightness
+        
+    def updateBrightness (self, newBrightness):
+        self.brightness = newBrightness
+        
+    def setBrightness(self, targetBrightness, serviceName):
+        # set state
+        p = { 'serviceId': serviceName, 'DeviceNum': self.id, 'newLoadlevelTarget': targetBrightness, 'rand': random.random()}
+        response = requests.get("http://192.168.1.88/port_3480/data_request?id=lu_action&output_format=json&action=SetLoadLevelTarget", params = p)
+
+        # return response
+        if "ERROR" not in response.__dict__['_content']:
+            if self.verifyBrightness(targetBrightness):
+                return True
+            else:
+                return jsonify(result = "Error", message = "Changing brightness of " + str(self.name) + "(" + str(self.id) + ") has timed out")
+        else:
+            return jsonify(result = "Error", message = response.__dict__['_content'])
+            
+    def verifyBrightness(self, targetBrightness):
+        for i in range(80):
+            p = { 'DeviceNum': self.id, 'rand': random.random() }
+            response = requests.get("http://192.168.1.88/port_3480/data_request?id=status&output_format=json", params = p)
+            states = json.loads(response.__dict__['_content'])['Device_Num_'+str(self.id)]['states']
+            
+            for state in states:
+                if state["variable"] == "LoadLevelStatus":
+                    self.state = state["value"]
+            if self.state == str(targetBrightness):
+                return True
+            else:
+                time.sleep(0.3)
+        return False
 
 # class lock inherits from device
 class Lock(Device):
